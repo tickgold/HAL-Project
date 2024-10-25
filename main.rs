@@ -1,20 +1,44 @@
-// Importation du module gpio
-mod Gpio;
+// main.rs
+#![no_std]
+#![no_main]
 
-fn main() {
-    // Création d'un objet GpioPin pour le pin numéro 2, configuré en sortie
-    let mut pin = Gpio::GpioPin::new(2, Gpio::Direction::Output);
+use core::panic::PanicInfo;
+use core::arch::asm;
+mod gpio;
 
-    // Configuration du pin en sortie
-    pin.configure_as_output();
+#[no_mangle]
+pub extern "C" fn main() -> ! {
+    // Configure le pin 13 comme sortie
+    gpio::GPIO::configure(13, true);
 
-    // Écriture de la valeur 'true' (HIGH) sur le pin pour l'activer
-    pin.write(true);
+    // Configure le pin 12 comme entrée
+    gpio::GPIO::configure(12, false);
 
-    // Reconfiguration du pin en entrée pour pouvoir lire son état
-    pin.configure_as_input();
+    loop {
+        // Écrire HIGH sur le pin 13
+        gpio::GPIO::write(13, true);
 
-    // Lecture de l'état du pin et affichage de la valeur lue
-    let state = pin.read();
-    println!("L'état du pin est: {}", state);
+        delay();
+
+        // Écrire LOW sur le pin 13
+        gpio::GPIO::write(13, false);
+
+        delay();
+
+        // Lire l'état du pin 12
+        let _pin_value = gpio::GPIO::read(12);
+    }
+}
+
+// Fonction de délai
+fn delay() {
+    for _ in 0..1_000_000 {
+        unsafe { asm!("nop"); } // Instruction vide pour créer un délai
+    }
+}
+
+// Gestion de panique
+#[panic_handler]
+fn panic(_info: &PanicInfo) -> ! {
+    loop {}
 }
