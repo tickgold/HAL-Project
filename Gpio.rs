@@ -1,56 +1,73 @@
-// Définition d'une structure pour représenter un pin GPIO
-// Cette structure contient le numéro du pin et sa direction (entrée ou sortie)
-pub struct GpioPin {
-    pub pin_number: u8,       // Numéro du pin (par exemple, 2 pour le pin D2)
-    pub direction: Direction, // Direction du pin (entrée ou sortie)
-}
+#![no_std]
 
-// Enumération pour représenter les directions possibles d'un pin GPIO
-pub enum Direction {
-    Input,  // Le pin est configuré en entrée
-    Output, // Le pin est configuré en sortie
-}
+use core::arch::asm;
 
-// Implémentation des méthodes pour la structure GpioPin
-impl GpioPin {
-    // Fonction pour créer un nouveau pin GPIO avec un numéro de pin et une direction spécifiée
-    pub fn new(pin_number: u8, direction: Direction) -> Self {
-        GpioPin { pin_number, direction }
+pub struct GPIO;
+
+impl GPIO {
+    // Configure le pin spécifié comme entrée ou sortie
+    pub fn configure(pin: u8, mode: bool) {
+        assert!(pin <= 13, "Le numero du pin doit etre entre 0 et 13");
+
+        let port = if pin < 8 { 0 } else { 1 };
+        let bit = (pin % 8) as u8; // bit est calculé à l'exécution
+
+        unsafe {
+            if mode {
+                // Configure comme sortie
+                match port {
+                    0 => asm!("sbi 0x24, {}", const(bit)), // PORTD
+                    1 => asm!("sbi 0x25, {}", const(bit)), // PORTB
+                    _ => unreachable!(),
+                }
+            } else {
+                // Configure comme entrée
+                match port {
+                    0 => asm!("cbi 0x24, {}", const(bit)), // PORTD
+                    1 => asm!("cbi 0x25, {}", const(bit)), // PORTB
+                    _ => unreachable!(),
+                }
+            }
+        }
     }
 
-    // Méthode pour configurer le pin en entrée
-    pub fn configure_as_input(&mut self) {
-        // Ici, on ajouterait la logique spécifique pour configurer le pin en entrée
-        // Par exemple, utiliser les registres du microcontrôleur pour définir le mode du pin
-        self.direction = Direction::Input; // Met à jour la direction dans la structure
-        println!("Pin {} configuré en entrée.", self.pin_number);
+    // Écrire sur un pin
+    pub fn write(pin: u8, value: bool) {
+        assert!(pin <= 13, "Pin number must be between 0 and 13");
+
+        let port = if pin < 8 { 0 } else { 1 };
+        let bit = (pin % 8) as u8; // bit est calculé à l'exécution
+
+        unsafe {
+            if value {
+                match port {
+                    0 => asm!("sbi 0x25, {}", const(bit)), // PORTD
+                    1 => asm!("sbi 0x24, {}", const(bit)), // PORTB
+                    _ => unreachable!(),
+                }
+            } else {
+                match port {
+                    0 => asm!("cbi 0x25, {}", const(bit)), // PORTD
+                    1 => asm!("cbi 0x24, {}", const(bit)), // PORTB
+                    _ => unreachable!(),
+                }
+            }
+        }
     }
 
-    // Méthode pour configurer le pin en sortie
-    pub fn configure_as_output(&mut self) {
-        // Ici, on ajouterait la logique spécifique pour configurer le pin en sortie
-        // Cela inclut potentiellement la configuration du registre de direction pour le microcontrôleur
-        self.direction = Direction::Output; // Met à jour la direction dans la structure
-        println!("Pin {} configuré en sortie.", self.pin_number);
-    }
+    // Lire l'état d'un pin
+    pub fn read(pin: u8) -> bool {
+        assert!(pin <= 13, "Pin number must be between 0 and 13");
 
-    // Méthode pour lire l'état du pin (retourne vrai pour HIGH et faux pour LOW)
-    pub fn read(&self) -> bool {
-        // Cette méthode simule la lecture d'un pin GPIO
-        // Dans une implémentation réelle, il faudrait accéder au registre d'entrée du microcontrôleur
-        println!("Lecture de l'état du pin {}.", self.pin_number);
-        false // Pour l'exemple, renvoie toujours faux (LOW)
-    }
+        let port = if pin < 8 { 0 } else { 1 };
+        let bit = (pin % 8) as u8; // bit est calculé à l'exécution
 
-    // Méthode pour écrire une valeur sur le pin (true pour HIGH et false pour LOW)
-    pub fn write(&self, value: bool) {
-        // Ici, on ajouterait la logique pour écrire une valeur sur le pin
-        // Cela pourrait inclure la modification du registre de sortie du microcontrôleur
-        if let Direction::Output = self.direction {
-            // Vérifie d'abord que le pin est configuré en sortie avant d'écrire
-            println!("Écriture de la valeur {} sur le pin {}.", value, self.pin_number);
-        } else {
-            println!("Impossible d'écrire sur le pin {} car il est configuré en entrée.", self.pin_number);
+        unsafe {
+            match port {
+                0 => (core::ptr::read_volatile(0x29 as *const u8) & (1 << bit)) != 0, // PIND
+                1 => (core::ptr::read_volatile(0x23 as *const u8) & (1 << bit)) != 0, // PINB
+                _ => unreachable!(),
+            }
         }
     }
 }
